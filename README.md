@@ -1,1 +1,1 @@
-# Advent of Code 2026
+# Advent Of Code 2026

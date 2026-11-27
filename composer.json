@@ -1,0 +1,6 @@
+{
+    "name": "joris/adventofcode2026",
+    "require": {
+        "php": "^8.5"
+    }
+}
