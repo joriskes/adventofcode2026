@@ -5,58 +5,112 @@ use Aoc\Client;
 use Aoc\Runner;
 use Dotenv\Dotenv;
 
+use function Laravel\Prompts\error;
+use function Laravel\Prompts\info;
+use function Laravel\Prompts\select;
+use function Laravel\Prompts\spin;
+use function Laravel\Prompts\table;
+
 require __DIR__ . '/vendor/autoload.php';
 
 Dotenv::createUnsafeImmutable(__DIR__)->safeLoad();
 
+$year = (int) (getenv('AOC_YEAR') ?: 2026);
+
 $usage = <<<TXT
 Usage:
-  php aoc make <day>                    scaffold dayNN/ and download input
+  php aoc                                  interactive menu
+  php aoc make <day>                       scaffold dayNN/ and download input
   php aoc run <day> [--part=1|2] [--test]  run solution (--test uses example.txt)
 
 TXT;
 
-$command = $argv[1] ?? null;
-$day = (int) ($argv[2] ?? 0);
-$options = array_slice($argv, 3);
-
-if (!in_array($command, ['make', 'run'], true) || $day < 1 || $day > 25) {
-    fwrite(STDERR, $usage);
-    exit(1);
+function dayDir(int $day): string
+{
+    return sprintf('%s/day%02d', __DIR__, $day);
 }
 
-$dir = sprintf('%s/day%02d', __DIR__, $day);
+function make(int $day, int $year): void
+{
+    $dir = dayDir($day);
+    is_dir($dir) || mkdir($dir);
 
-try {
-    if ($command === 'make') {
-        is_dir($dir) || mkdir($dir);
-
-        if (!is_file("$dir/solution.php")) {
-            copy(__DIR__ . '/stubs/solution.php', "$dir/solution.php");
-            echo "Created $dir/solution.php", PHP_EOL;
-        }
-        if (!is_file("$dir/example.txt")) {
-            touch("$dir/example.txt");
-        }
-        if (is_file("$dir/input.txt")) {
-            echo 'Input already downloaded.', PHP_EOL;
-            exit(0);
-        }
-
-        $session = getenv('AOC_SESSION');
-        if (!$session) {
-            throw new RuntimeException('AOC_SESSION is not set in .env');
-        }
-        $client = new Client($session, getenv('AOC_USER_AGENT') ?: 'adventofcode2026 php helper');
-        file_put_contents("$dir/input.txt", $client->input((int) (getenv('AOC_YEAR') ?: 2026), $day));
-        echo "Downloaded $dir/input.txt", PHP_EOL;
-        exit(0);
+    if (!is_file("$dir/solution.php")) {
+        copy(__DIR__ . '/stubs/solution.php', "$dir/solution.php");
+        info("Created $dir/solution.php");
+    }
+    if (!is_file("$dir/example.txt")) {
+        touch("$dir/example.txt");
+    }
+    if (is_file("$dir/input.txt")) {
+        info('Input already downloaded.');
+        return;
     }
 
+    $session = getenv('AOC_SESSION');
+    if (!$session) {
+        throw new RuntimeException('AOC_SESSION is not set in .env');
+    }
+    $client = new Client($session, getenv('AOC_USER_AGENT') ?: 'adventofcode2026 php helper');
+    $input = spin(fn () => $client->input($year, $day), 'Downloading input...');
+    file_put_contents("$dir/input.txt", $input);
+    info("Downloaded $dir/input.txt");
+}
+
+/** @param list<int> $parts */
+function run(int $day, array $parts, bool $test): void
+{
+    $dir = dayDir($day);
     if (!is_file("$dir/solution.php")) {
         throw new RuntimeException("No solution for day $day, run: php aoc make $day");
     }
 
+    table(['Part', 'Answer', 'Time'], new Runner($dir)->run($parts, $test));
+}
+
+function interactive(int $year): void
+{
+    $today = (int) gmdate('j', time() - 5 * 3600);
+    $inSeason = gmdate('Y-m', time() - 5 * 3600) === sprintf('%d-12', $year);
+
+    $days = [];
+    for ($d = 1; $d <= 25; $d++) {
+        $days[$d] = sprintf('Day %02d%s', $d, is_dir(dayDir($d)) ? '' : ' (new)');
+    }
+    $day = (int) select('Which day?', $days, default: $inSeason ? min($today, 25) : 1, scroll: 10);
+
+    $actions = is_file(dayDir($day) . '/solution.php')
+        ? ['input' => 'Run on input', 'example' => 'Run on example', 'make' => 'Make (download input)']
+        : ['make' => 'Make (scaffold + download input)'];
+    $action = select('What do you want to do?', $actions);
+
+    match ($action) {
+        'make' => make($day, $year),
+        'input' => run($day, [1, 2], false),
+        'example' => run($day, [1, 2], true),
+    };
+}
+
+$command = $argv[1] ?? null;
+
+try {
+    if ($command === null) {
+        interactive($year);
+        exit(0);
+    }
+
+    $day = (int) ($argv[2] ?? 0);
+    if (!in_array($command, ['make', 'run'], true) || $day < 1 || $day > 25) {
+        fwrite(STDERR, $usage);
+        exit(1);
+    }
+
+    if ($command === 'make') {
+        make($day, $year);
+        exit(0);
+    }
+
+    $options = array_slice($argv, 3);
     $parts = [1, 2];
     foreach ($options as $option) {
         if (preg_match('/^--part=([12])$/', $option, $m)) {
@@ -66,8 +120,8 @@ try {
         }
     }
 
-    new Runner($dir)->run($parts, in_array('--test', $options, true));
+    run($day, $parts, in_array('--test', $options, true));
 } catch (RuntimeException $e) {
-    fwrite(STDERR, $e->getMessage() . PHP_EOL);
+    error($e->getMessage());
     exit(1);
 }

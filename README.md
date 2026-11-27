@@ -9,6 +9,7 @@ Optional: `AOC_YEAR` (default 2026) and `AOC_USER_AGENT` (AoC asks automated too
 ## Usage
 
 ```bash
+php aoc                         # interactive menu: pick a day, then make or run
 php aoc make 1                  # creates day01/ (solution.php, example.txt) and downloads input.txt
 php aoc run 1                   # runs both parts on input.txt
 php aoc run 1 --part=2          # runs only part 2
