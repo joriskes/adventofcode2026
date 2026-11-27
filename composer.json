@@ -1,6 +1,7 @@
 {
     "name": "joris/adventofcode2026",
     "require": {
-        "php": "^8.5"
+        "php": "^8.5",
+        "vlucas/phpdotenv": "^5.8"
     }
 }
