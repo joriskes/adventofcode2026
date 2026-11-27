@@ -1,0 +1,73 @@
+#!/usr/bin/env php
+<?php
+
+use Aoc\Client;
+use Aoc\Runner;
+use Dotenv\Dotenv;
+
+require __DIR__ . '/vendor/autoload.php';
+
+Dotenv::createUnsafeImmutable(__DIR__)->safeLoad();
+
+$usage = <<<TXT
+Usage:
+  php aoc make <day>                    scaffold dayNN/ and download input
+  php aoc run <day> [--part=1|2] [--test]  run solution (--test uses example.txt)
+
+TXT;
+
+$command = $argv[1] ?? null;
+$day = (int) ($argv[2] ?? 0);
+$options = array_slice($argv, 3);
+
+if (!in_array($command, ['make', 'run'], true) || $day < 1 || $day > 25) {
+    fwrite(STDERR, $usage);
+    exit(1);
+}
+
+$dir = sprintf('%s/day%02d', __DIR__, $day);
+
+try {
+    if ($command === 'make') {
+        is_dir($dir) || mkdir($dir);
+
+        if (!is_file("$dir/solution.php")) {
+            copy(__DIR__ . '/stubs/solution.php', "$dir/solution.php");
+            echo "Created $dir/solution.php", PHP_EOL;
+        }
+        if (!is_file("$dir/example.txt")) {
+            touch("$dir/example.txt");
+        }
+        if (is_file("$dir/input.txt")) {
+            echo 'Input already downloaded.', PHP_EOL;
+            exit(0);
+        }
+
+        $session = getenv('AOC_SESSION');
+        if (!$session) {
+            throw new RuntimeException('AOC_SESSION is not set in .env');
+        }
+        $client = new Client($session, getenv('AOC_USER_AGENT') ?: 'adventofcode2026 php helper');
+        file_put_contents("$dir/input.txt", $client->input((int) (getenv('AOC_YEAR') ?: 2026), $day));
+        echo "Downloaded $dir/input.txt", PHP_EOL;
+        exit(0);
+    }
+
+    if (!is_file("$dir/solution.php")) {
+        throw new RuntimeException("No solution for day $day, run: php aoc make $day");
+    }
+
+    $parts = [1, 2];
+    foreach ($options as $option) {
+        if (preg_match('/^--part=([12])$/', $option, $m)) {
+            $parts = [(int) $m[1]];
+        } elseif ($option !== '--test') {
+            throw new RuntimeException("Unknown option $option\n\n$usage");
+        }
+    }
+
+    new Runner($dir)->run($parts, in_array('--test', $options, true));
+} catch (RuntimeException $e) {
+    fwrite(STDERR, $e->getMessage() . PHP_EOL);
+    exit(1);
+}

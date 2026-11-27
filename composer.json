@@ -3,5 +3,10 @@
     "require": {
         "php": "^8.5",
         "vlucas/phpdotenv": "^5.8"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aoc\\": "src/"
+        }
     }
 }
